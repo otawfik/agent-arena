@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Arena: Live Multi-Agent Debates</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+  <h1>Agent Arena</h1>
+  <p class="subtitle">Watch AI agents plan, argue, fact-check, and judge, live.</p>
+</header>
+
+<main>
+  <section class="controls">
+    <label for="topic">Debate topic</label>
+    <select id="topic"></select>
+    <button id="start">Start Debate</button>
+    <span id="status" class="status idle">idle</span>
+  </section>
+
+  <section class="arena">
+    <div class="panel">
+      <h2>Agent activity</h2>
+      <div id="agents" class="agents"></div>
+    </div>
+    <div class="panel transcript-panel">
+      <h2>Live transcript</h2>
+      <div id="transcript" class="transcript"></div>
+    </div>
+    <div class="panel">
+      <h2>Scoreboard</h2>
+      <div id="scoreboard" class="scoreboard"><p class="muted">Scores appear as the judge deliberates.</p></div>
+      <h2>Verdict</h2>
+      <div id="verdict" class="verdict"><p class="muted">No verdict yet.</p></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const AGENT_COLORS = {
+  "Vera the Moderator": "mod",
+  "Pro": "pro",
+  "Con": "con",
+  "Veritas the Fact-Checker": "fact",
+  "Justice Arena": "judge",
+  "Audience": "aud"
+};
+
+let runId = null, since = 0, timer = null;
+const seenAgents = new Set();
+
+async function loadTopics() {
+  const res = await fetch("/api/topics");
+  const topics = await res.json();
+  const sel = document.getElementById("topic");
+  topics.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t.id; opt.textContent = t.title;
+    opt.title = t.blurb;
+    sel.appendChild(opt);
+  });
+}
+
+function agentCard(name) {
+  const div = document.createElement("div");
+  div.className = "agent-card " + (AGENT_COLORS[name] || "");
+  div.innerHTML = `<span class="dot"></span><strong></strong><span class="last"></span>`;
+  div.querySelector("strong").textContent = name;
+  return div;
+}
+
+function addEvent(e) {
+  if (!seenAgents.has(e.agent)) {
+    seenAgents.add(e.agent);
+    document.getElementById("agents").appendChild(agentCard(e.agent));
+  }
+  const cards = document.querySelectorAll(".agent-card");
+  cards.forEach(c => {
+    if (c.querySelector("strong").textContent === e.agent) {
+      c.querySelector(".last").textContent = e.kind.replace("_", " ");
+      c.classList.add("active");
+      setTimeout(() => c.classList.remove("active"), 600);
+    }
+  });
+
+  const t = document.getElementById("transcript");
+  const div = document.createElement("div");
+  div.className = "event kind-" + e.kind;
+  const round = e.round ? `<span class="round">${e.round}</span>` : "";
+  const safe = e.text.replace(/</g, "&lt;");
+  if (e.kind === "thinking") {
+    div.innerHTML = `${round}<span class="who">${e.agent} is thinking:</span> <em>${safe}</em>`;
+  } else if (e.kind === "tool_call") {
+    div.innerHTML = `${round}<span class="who">${e.agent}</span> <code>${safe}</code>`;
+  } else if (e.kind === "tool_result") {
+    div.innerHTML = `${round}<span class="who tool">tool result:</span> <code>${safe}</code>`;
+  } else if (e.kind === "score" || e.kind === "plan") {
+    div.innerHTML = `${round}<span class="who">${e.agent}:</span> ${safe}`;
+  } else if (e.kind === "verdict") {
+    div.innerHTML = `<span class="who">Winner: ${safe.toUpperCase()}</span>`;
+  } else {
+    div.innerHTML = `${round}<span class="who">${e.agent}:</span> ${safe}`;
+  }
+  t.appendChild(div);
+  t.scrollTop = t.scrollHeight;
+}
+
+async function poll() {
+  const res = await fetch(`/api/events?run_id=${runId}&since=${since}`);
+  const data = await res.json();
+  data.events.forEach(e => { addEvent(e); since = Math.max(since, e.seq); });
+  if (data.done) {
+    clearInterval(timer);
+    document.getElementById("status").textContent = "judging...";
+    const r = await fetch(`/api/result?run_id=${runId}`);
+    const payload = await r.json();
+    showResult(payload.result);
+    document.getElementById("status").textContent = "complete";
+    document.getElementById("status").className = "status done";
+    document.getElementById("start").disabled = false;
+  }
+}
+
+function showResult(result) {
+  const j = result.judgement;
+  const sb = document.getElementById("scoreboard");
+  sb.innerHTML = "";
+  ["pro", "con"].forEach(side => {
+    const s = j.scores[side];
+    const row = document.createElement("div");
+    row.className = "score-row " + (j.winner === side ? "winner" : "");
+    row.innerHTML = `<strong>${side.toUpperCase()}</strong>
+      <span>rhetoric ${s.rhetoric}</span><span>evidence ${s.evidence_hits}</span>
+      <span>facts ${s.fact_net >= 0 ? "+" : ""}${s.fact_net}</span>
+      <span>total <b>${s.total}</b></span>`;
+    sb.appendChild(row);
+  });
+  const aud = document.createElement("div");
+  aud.className = "score-row";
+  aud.innerHTML = `<strong>AUDIENCE</strong><span>pro ${result.audience.pro}%</span><span>con ${result.audience.con}%</span>`;
+  sb.appendChild(aud);
+
+  const v = document.getElementById("verdict");
+  v.innerHTML = `<p class="winner-line">${j.winner.toUpperCase()} wins by ${j.margin} points</p><p>${j.verdict}</p>`;
+}
+
+document.getElementById("start").addEventListener("click", async () => {
+  const topic = document.getElementById("topic").value;
+  document.getElementById("start").disabled = true;
+  document.getElementById("transcript").innerHTML = "";
+  document.getElementById("agents").innerHTML = "";
+  document.getElementById("scoreboard").innerHTML = '<p class="muted">Scores appear as the judge deliberates.</p>';
+  document.getElementById("verdict").innerHTML = '<p class="muted">No verdict yet.</p>';
+  seenAgents.clear(); since = 0;
+  const res = await fetch("/api/start", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({topic})
+  });
+  const data = await res.json();
+  runId = data.run_id;
+  const status = document.getElementById("status");
+  status.textContent = "debate live";
+  status.className = "status live";
+  timer = setInterval(poll, 400);
+});
+
+loadTopics();
+</script>
+</body>
+</html>
