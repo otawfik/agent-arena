@@ -132,3 +132,12 @@ def test_topics_json_matches_fact_corpus():
     topics = {t["id"] for t in json.loads((data_dir / "topics.json").read_text())["topics"]}
     facts = set(json.loads((data_dir / "facts.json").read_text()))
     assert topics == facts
+
+
+def test_web_debate_in_one_request():
+    client = create_app().test_client()
+    data = client.post("/api/debate", json={"topic": "tabs-vs-spaces"}).get_json()
+    assert data["events"], "the full event log comes back in the response"
+    assert [e["seq"] for e in data["events"]] == sorted(e["seq"] for e in data["events"])
+    assert data["result"]["judgement"]["winner"] in ("pro", "con")
+    assert client.post("/api/debate", json={"topic": "nope"}).status_code == 400

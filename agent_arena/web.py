@@ -76,6 +76,24 @@ def create_app() -> Flask:
         threading.Thread(target=_run, daemon=True).start()
         return jsonify({"run_id": run_id, "topic": topic})
 
+    @app.post("/api/debate")
+    def debate_now():
+        """Run a whole debate in one request and return every event plus the result.
+
+        The page replays the events at reading speed. Unlike /api/start, this needs no
+        background thread and no state shared between requests, so it also works on
+        serverless hosts, where each request may land on a different instance.
+        """
+        payload = request.get_json(silent=True) or {}
+        topic = payload.get("topic", "pineapple-pizza")
+        try:
+            FactBase().motion(topic)
+        except KeyError:
+            return jsonify({"error": f"Unknown topic '{topic}'"}), 400
+        log: List[Dict[str, Any]] = []
+        result = DebateOrchestrator(topic=topic, bus=LiveBus(log)).run()
+        return jsonify({"topic": topic, "events": log, "result": result})
+
     @app.get("/api/events")
     def events():
         run_id = request.args.get("run_id", "")

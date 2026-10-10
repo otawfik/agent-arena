@@ -154,17 +154,26 @@ document.getElementById("start").addEventListener("click", async () => {
   document.getElementById("scoreboard").innerHTML = '<p class="muted">Scores appear as the judge deliberates.</p>';
   document.getElementById("verdict").innerHTML = '<p class="muted">No verdict yet.</p>';
   seenAgents.clear(); since = 0;
-  const res = await fetch("/api/start", {
+  const status = document.getElementById("status");
+  status.textContent = "debate live";
+  status.className = "status live";
+  // the whole debate runs in one request; replay it at reading speed
+  const res = await fetch("/api/debate", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({topic})
   });
   const data = await res.json();
-  runId = data.run_id;
-  const status = document.getElementById("status");
-  status.textContent = "debate live";
-  status.className = "status live";
-  timer = setInterval(poll, 400);
+  for (const e of data.events) {
+    addEvent(e);
+    await new Promise(r => setTimeout(r, 260));
+  }
+  status.textContent = "judging...";
+  await new Promise(r => setTimeout(r, 500));
+  showResult(data.result);
+  status.textContent = "complete";
+  status.className = "status done";
+  document.getElementById("start").disabled = false;
 });
 
 loadTopics();
