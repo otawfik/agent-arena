@@ -2,6 +2,8 @@
 
 [![tests](https://github.com/otawfik/agent-arena/actions/workflows/ci.yml/badge.svg)](https://github.com/otawfik/agent-arena/actions/workflows/ci.yml)
 
+**[▶ Live demo](https://agent-arena-neon.vercel.app)**
+
 A tiny multi-agent framework where AI agents plan, argue, fact-check, and judge debates, with a live dashboard that streams every agent's reasoning as it happens.
 
 No API keys, no GPU, no paid services. Everything runs locally with Python and Flask.
