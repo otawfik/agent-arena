@@ -1,8 +1,12 @@
 # Agent Arena
 
+[![tests](https://github.com/otawfik/agent-arena/actions/workflows/ci.yml/badge.svg)](https://github.com/otawfik/agent-arena/actions/workflows/ci.yml)
+
 A tiny multi-agent framework where AI agents plan, argue, fact-check, and judge debates, with a live dashboard that streams every agent's reasoning as it happens.
 
 No API keys, no GPU, no paid services. Everything runs locally with Python and Flask.
+
+![Agent Arena dashboard: agent activity, live transcript, scoreboard and verdict](screenshots/app.jpg)
 
 ## What it is
 
@@ -118,9 +122,7 @@ can replace `FactBase` without touching the agents.
 
 ## Screenshots
 
-Run `python app.py` and open http://127.0.0.1:5000 to see the dashboard:
-agent activity cards on the left, the streaming transcript in the center,
-and the scoreboard with the final verdict on the right.
+Run `python app.py` and open http://127.0.0.1:5000 — agent activity on the left, the streaming transcript in the center, the scoreboard and verdict on the right (screenshot at the top of this page).
 
 ## Requirements
 
