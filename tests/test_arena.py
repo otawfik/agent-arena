@@ -1,6 +1,7 @@
 """Tests for the Agent Arena framework."""
 
 import json
+import time
 
 import pytest
 
@@ -107,13 +108,17 @@ def test_web_api_flow():
     assert any(t["id"] == "pineapple-pizza" for t in topics)
     started = client.post("/api/start", json={"topic": "cereal-soup"}).get_json()
     run_id = started["run_id"]
+    # the debate runs on a background thread: poll against a deadline, not a fixed
+    # number of tight-loop requests (200 instant polls could finish before it did)
     events, done = [], False
-    for _ in range(200):
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
         payload = client.get(f"/api/events?run_id={run_id}&since={len(events)}").get_json()
         events.extend(payload["events"])
         if payload["done"]:
             done = True
             break
+        time.sleep(0.01)
     assert done and events, "debate should stream events then finish"
     result = client.get(f"/api/result?run_id={run_id}").get_json()
     assert result["done"] and result["result"]["judgement"]["winner"] in ("pro", "con")
